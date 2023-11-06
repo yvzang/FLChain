@@ -9,5 +9,5 @@ import torch
 from flcore.client.clientbase import Client
 
 class ClientFedAvg(Client):
-    def __init__(self, id, model, lr, lr_decay, decay_period, device):
-        super().__init__(id, model, lr, lr_decay, decay_period, device)
+    def __init__(self, listen_addr, boot_addr, id, model, lr, lr_decay, decay_period, device):
+        super().__init__(listen_addr, boot_addr, id, model, lr, lr_decay, decay_period, device)

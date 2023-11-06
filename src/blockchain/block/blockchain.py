@@ -1,7 +1,7 @@
-from block.block import Block
-from block.blocklist import BlockList
-from block.block import Transaction_pool
-from block.transaction import Transaction
+from blockchain.block.block import Block
+from blockchain.block.blocklist import BlockList
+from blockchain.block.block import Transaction_pool
+from blockchain.block.transaction import Transaction
 import json
 
 

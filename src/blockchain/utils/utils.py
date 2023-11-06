@@ -6,7 +6,7 @@ def digest(string):
         string = str(string).encode('utf8')
     return hashlib.sha1(string).digest()
 
-def data_digest(string) -> int:
+def data_digest(string) -> str:
     return digest(string).hex()
 
 async def gather_syncronize_task(tasks : list):

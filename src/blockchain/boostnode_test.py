@@ -1,11 +1,11 @@
-from node import Node
-from block.transaction import Transaction
-from block.transaction_pool import Transaction_pool
-from block.block import Block
+from blockchain.node import Node
+from blockchain.block.transaction import Transaction
+from blockchain.block.transaction_pool import Transaction_pool
+from blockchain.block.block import Block
 import logging
 import base64
 import argparse
-from parse import ArgParse
+from blockchain.parse import ArgParse
 from threading import Thread
 import asyncio
 
@@ -53,7 +53,6 @@ def create_node(loop, node : Node, interface, port, boot_inter, boot_port):
     loop.run_until_complete(node.listen(port, interface))
     if boot_inter and boot_port:
         boostaddress = (boot_inter, int(boot_port))
-        print(boostaddress)
         loop.run_until_complete(node.node_bootstrap([boostaddress]))
     try:
         loop.run_forever()

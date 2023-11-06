@@ -1,12 +1,12 @@
-from kademlia.network import Server
-from kademlia.crawling import ValueSpiderCrawl
-from block.transaction import Transaction
-from block.transaction_pool import Transaction_pool
-from block.block import Block
-from block.blocklist import BlockList
-from block.blockchain import BlockChain
-from protocol import DataExchangeProtocol
-from utils.utils import *
+from blockchain.kademlia.network import Server
+from blockchain.kademlia.crawling import ValueSpiderCrawl
+from blockchain.block.transaction import Transaction
+from blockchain.block.transaction_pool import Transaction_pool
+from blockchain.block.block import Block
+from blockchain.block.blocklist import BlockList
+from blockchain.block.blockchain import BlockChain
+from blockchain.protocol import DataExchangeProtocol
+from blockchain.utils.utils import *
 import json
 import math
 import random

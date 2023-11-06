@@ -3,15 +3,21 @@ from torch.utils.data import DataLoader
 from torch.nn.modules import CrossEntropyLoss
 from transformer import Transformer
 from copy import deepcopy
-from threading import Lock
-from queue import Queue
+from threading import Thread
 import numpy as np
+import json
 import torch
+import base64
+import asyncio
 from flcore.optimizer.fedoptimizer import BasedOptimizer
+from io import BytesIO
+
+from blockchain.node import Node
 
 
 class Client():
-    def __init__(self, id, model, lr, lr_decay, decay_period, device):
+
+    def __init__(self, listen_addr, boot_addr, id, model, lr, lr_decay, decay_period, device):
         
         self.device = device
         self.local_module : torch.nn.Module = self.__to_device__(model)
@@ -28,7 +34,26 @@ class Client():
         self.valid_loss_min = np.Inf
         self.client_id : int = id
         self.attack : bool = False
+        self.server = Node(node_id=str(id))
+        self.server_bootstrap(listen_addr, boot_addr)
 
+    
+    def server_bootstrap(self, listen_addr : tuple, boot_addr:tuple):
+        thread = Thread(target=self._server_bootstrap, args=(listen_addr, boot_addr))
+        thread.start()
+
+    def _server_bootstrap(self, listen_addr : tuple, boot_addr : tuple):
+        loop = asyncio.get_event_loop()
+        loop.run_until_complete(self.server.listen(listen_addr[1], listen_addr[0]))
+        if boot_addr[0] and boot_addr[1]:
+            loop.run_until_complete(self.server.node_bootstrap([boot_addr]))
+        try:    
+            loop.run_forever()
+        except KeyboardInterrupt:
+            pass
+        finally:
+            self.server.stop()
+            loop.stop()
 
     def set_dataloader(self, dataloader : DataLoader):
         self.train_loader = dataloader[0]
@@ -118,18 +143,26 @@ class Client():
             self.valid_loss_min = valid_loss
         return valid_loss
     
-    def send_parameters(self, parameters : dict, params_queue : Queue, lock : Lock):
-        lock.acquire()
-        params_queue.put({"params": parameters}, block=True)
-        lock.release()
+    def send_parameters(self, parameters : dict):
+        result = {}
+        for key, value in parameters.items():
+            bytes_io = BytesIO()
+            torch.save(value.cpu(), bytes_io)
+            result[key] = base64.b64encode(bytes_io.getvalue()).decode()
+        del parameters
+        res_str = json.dumps(result)
+        del result
+        trans = self.server.make_transaction("0", res_str)
+        asyncio.run(self.server.broadcast_transaction(trans))
 
-    def update_parameters(self, params_queue : Queue, lock : Lock):
+
+    def update_parameters(self):
         old_weight, _ = self.train_local_model()
         valid_loss = self.valid_local_model()
         new_weight = self.local_module.state_dict()
         with torch.no_grad():
             #Only upload parameters that trainable layer
             self.pseudo_grad = {name : (old_weight[name].data - new_weight[name].data) for name, _ in self.local_module.named_parameters()}
-            self.send_parameters(self.pseudo_grad, params_queue, lock)
+            self.send_parameters(self.pseudo_grad)
 
 

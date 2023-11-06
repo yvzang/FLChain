@@ -1,5 +1,5 @@
-from block.transaction import Transaction
-from block.transaction_pool import Transaction_pool
+from blockchain.block.transaction import Transaction
+from blockchain.block.transaction_pool import Transaction_pool
 from copy import deepcopy
 import time
 import json

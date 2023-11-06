@@ -4,12 +4,12 @@ import logging
 
 from rpcudp.protocol import RPCProtocol
 
-from utils.utils import *
-from kademlia.node import Node
-from kademlia.routing import RoutingTable
-from kademlia.utils import digest
+from blockchain.utils.utils import *
+from blockchain.kademlia.node import Node
+from blockchain.kademlia.routing import RoutingTable
+from blockchain.kademlia.utils import digest
 
-log = logging.getLogger(__name__)  # pylint: disable=invalid-name
+log = logging.getLogger('blockchain')  # pylint: disable=invalid-name
 
 
 class KademliaProtocol(RPCProtocol):

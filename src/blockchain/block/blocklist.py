@@ -1,6 +1,6 @@
-from block.block import Block
-from block.transaction_pool import Transaction_pool
-from block.transaction import Transaction
+from blockchain.block.block import Block
+from blockchain.block.transaction_pool import Transaction_pool
+from blockchain.block.transaction import Transaction
 import json
 from copy import deepcopy
 

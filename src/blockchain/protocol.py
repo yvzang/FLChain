@@ -1,13 +1,13 @@
 import asyncio
 import logging
 import json
-from kademlia.protocol import KademliaProtocol
-from block.blockchain import BlockChain
-from block.blocklist import BlockList
-from block.block import Block
-from block.transaction import Transaction
-from block.transaction_pool import Transaction_pool
-from utils.utils import *
+from blockchain.kademlia.protocol import KademliaProtocol
+from blockchain.block.blockchain import BlockChain
+from blockchain.block.blocklist import BlockList
+from blockchain.block.block import Block
+from blockchain.block.transaction import Transaction
+from blockchain.block.transaction_pool import Transaction_pool
+from blockchain.utils.utils import *
 
 log = logging.getLogger("Blockchain")
 

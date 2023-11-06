@@ -10,10 +10,10 @@ from utils.readData import *
 
 
 class ServerBase():
-    def __init__(self, model, device, testloader, testbatchsize, clients, test_epoch, train_round, save_path, agg_rate):
+    def __init__(self, model, device, testloader, testbatchsize, client, test_epoch, train_round, save_path, agg_rate):
         self.device : str = device
         self.model : torch.nn.Module = self.__to_device__(model)
-        self.clients = clients
+        self.client = client
         self.testloader = testloader
         self.testbatchsize = testbatchsize
         self.loss_fn :  CrossEntropyLoss = self.__to_device__(CrossEntropyLoss())
@@ -48,23 +48,10 @@ class ServerBase():
         #进行epoch轮迭代
         self.total_epoch = 1
         while(True):
-            #挑选train_rate * len(clients)个参与方
-            choiced_clients = random.sample(self.clients, int(self.agg_rate * len(self.clients)))
-            
-            params_queue = queue.Queue(maxsize=len(self.clients))
-            lock = Lock()
-            thread_list = []
-            print("第{}轮训练：".format(self.total_epoch))
-            for single_client in choiced_clients:
-                #同步训练，获得局部模型参数
-                thread = Thread(target=single_client.update_parameters, args=(params_queue, lock), daemon=True, name="{}".format(single_client.client_id))
-                thread_list.append(thread)
-                thread.start()
-            #等待参与方训练完成
-            for t in thread_list:
-                t.join()
+            #开始训练
+            self.client.update_parameters()
             #加权平均
-            global_params = self.model_aggregation(params_queue)
+            global_params = self.model_aggregation()
             loss, accuracy = self.get_loss_accu()
             print("loss: {}".format(loss.item()) + ", accuracy: {}".format(accuracy.item()))
             #记录数据
@@ -203,12 +190,11 @@ class ServerBase():
         return arg_module
     
 
-    def model_aggregation(self, params_queue : queue.Queue):
+    def model_aggregation(self):
         '''对所有参与方的参数加和'''
-        if params_queue.empty():
-            raise Exception("没有能进行加和的参数..")
         #先取出所有梯度
-        item = params_queue.get()
+
+        item = self.client
         param = item["params"]
         self.model = self.update_parameter_layer(self.model, [param], [1.0])
         return self.model.state_dict()

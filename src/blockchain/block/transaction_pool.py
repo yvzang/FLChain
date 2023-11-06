@@ -1,5 +1,5 @@
-from block.transaction import Transaction
-from utils.utils import *
+from blockchain.block.transaction import Transaction
+from blockchain.utils.utils import *
 from copy import deepcopy
 import json
 
