@@ -1,6 +1,9 @@
 import time
 from itertools import takewhile
 import operator
+import binascii
+import os
+from os import path
 from collections import OrderedDict
 from abc import abstractmethod, ABC
 
@@ -44,32 +47,53 @@ class IStorage(ABC):
 
 
 class ForgetfulStorage(IStorage):
-    def __init__(self, ttl=604800):
+    def __init__(self, storage_path, ttl=604800):
         """
         By default, max age is a week.
         """
         self.data = OrderedDict()
         self.ttl = ttl
+        self.storage_path = storage_path
+        self.__load_items_from_path__()
+
+    def __load_items_from_path__(self):
+        if not path.exists(self.storage_path):
+            os.makedirs(self.storage_path)
+
+    def __write_to__(self, full_name, value):
+        with open(full_name, mode='wb') as f:
+            return f.write(value.encode())
+
+    def __read_from__(self, full_name):
+        with open(full_name, mode='rb') as f:
+            return f.read().decode()
 
     def __setitem__(self, key, value):
         if key in self.data:
-            del self.data[key]
-        self.data[key] = (time.monotonic(), value)
+            self.remove(key)
+        self.data[key] = time.monotonic()
+        self.__write_to__(self.__full_name__(self.__concat_filename__(self.data[key], key)), value)
         self.cull()
 
     def cull(self):
         for _, _ in self.iter_older_than(self.ttl):
-            self.data.popitem(last=False)
+            item = self.data.popitem(last=False)
+            self.remove(item[0])
 
     def get(self, key, default=None):
         self.cull()
         if key in self.data:
             return self[key]
         return default
+    
+    def remove(self, key):
+        if key in self.data:
+            os.remove(self.__full_name__(self.__concat_filename__(self.data[key], key)))
+            self.data.pop(key)
 
     def __getitem__(self, key):
         self.cull()
-        return self.data[key][1]
+        return self.__read_from__(self.__full_name__(self.__concat_filename__(self.data[key], key)))
 
     def __repr__(self):
         self.cull()
@@ -77,9 +101,9 @@ class ForgetfulStorage(IStorage):
 
     def iter_older_than(self, seconds_old):
         min_birthday = time.monotonic() - seconds_old
-        zipped = self._triple_iter()
+        zipped = self.data.items()
         matches = takewhile(lambda r: min_birthday >= r[1], zipped)
-        return list(map(operator.itemgetter(0, 2), matches))
+        return list(matches)
 
     def _triple_iter(self):
         ikeys = self.data.keys()
@@ -88,7 +112,16 @@ class ForgetfulStorage(IStorage):
         return zip(ikeys, ibirthday, ivalues)
 
     def __iter__(self):
-        self.cull()
-        ikeys = self.data.keys()
-        ivalues = map(operator.itemgetter(1), self.data.values())
-        return zip(ikeys, ivalues)
+        for key in self.data.keys():
+            yield (key, self[key])
+
+    def __concat_filename__(self, monotonic:float, key:bytes) -> str:
+        return str(monotonic)+'-'+ key.hex()
+    
+    def __split_filaname__(self, filename:str) -> tuple:
+        item = filename.split('-')
+        return (float(item[0]), bytes.fromhex(item[1]))
+    
+    def __full_name__(self, filename):
+        return self.storage_path+'\\'+filename
+        

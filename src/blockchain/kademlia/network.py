@@ -13,7 +13,7 @@ from blockchain.kademlia.node import Node
 from blockchain.kademlia.crawling import ValueSpiderCrawl
 from blockchain.kademlia.crawling import NodeSpiderCrawl
 
-log = logging.getLogger(__name__)  # pylint: disable=invalid-name
+log = logging.getLogger("Blockchain")  # pylint: disable=invalid-name
 
 
 # pylint: disable=too-many-instance-attributes
@@ -38,8 +38,8 @@ class Server:
         """
         self.ksize = ksize
         self.alpha = alpha
-        self.storage = storage or ForgetfulStorage()
         self.node = Node(node_id or digest(random.getrandbits(255)))
+        self.storage = storage or ForgetfulStorage(".\\storage\\"+str(self.node.long_id))
         self.transport = None
         self.protocol = None
         self.refresh_loop = None
@@ -97,7 +97,7 @@ class Server:
 
         # now republish keys older than one hour
         for dkey, value in self.storage.iter_older_than(3600):
-            await self.set_digest(dkey, value)
+            await self.set_digest(dkey, self.storage[dkey])
 
     def bootstrappable_neighbors(self):
         """
@@ -154,6 +154,7 @@ class Server:
                                   self.ksize, self.alpha)
         return await spider.find()
 
+
     async def set(self, key, value):
         """
         Set the given string key to the given value in the network.
@@ -165,6 +166,7 @@ class Server:
         log.info("setting '%s' = '%s' on network", key, value)
         dkey = digest(key)
         return await self.set_digest(dkey, value)
+
 
     async def set_digest(self, dkey, value):
         """
@@ -182,7 +184,6 @@ class Server:
         spider = NodeSpiderCrawl(self.protocol, node, nearest,
                                  self.ksize, self.alpha)
         nodes = await spider.find()
-        log.info("setting '%s' on %s", dkey.hex(), list(map(str, nodes)))
 
         # if this node is close too, then store here as well
         biggest = max([n.distance_to(node) for n in nodes])
@@ -190,7 +191,9 @@ class Server:
             self.storage[dkey] = value
         results = [self.protocol.call_store(n, dkey, value) for n in nodes]
         # return true only if at least one store call succeeded
-        return any(await asyncio.gather(*results))
+        res = await asyncio.gather(*results)
+        log.info("setting '%s' on %s", dkey.hex(), list(map(str, nodes)))
+        return res
 
     def save_state(self, fname):
         """

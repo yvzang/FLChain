@@ -39,7 +39,7 @@ def allacate_address(ip : str, port_start : int, num : int):
     return addrs
 
 
-def create_clients(client_type, algorithm, dataloaders, model, lr, lr_decay, decay_period, device):
+def create_clients(client_type, dataloaders, model, lr, lr_decay, decay_period, device):
     clients = []
     addrs = allacate_address("127.0.0.1", 8888, len(dataloaders))
     for i, addr in zip(range(len(dataloaders)), addrs):
@@ -69,19 +69,16 @@ def run(args : argparse.Namespace):
     testloader = read_test_dataset(args.dataset, args.batch_size)
     #create server
     if args.agg_algorithm in 'FedAvg':
-        client = clientFedAvg.ClientFedAvg((args.ip, args.port), (args.boot_ip, args.boot_port), args.name, deepcopy(model), args.learning_rate, args.lr_decay, 
-                                           args.lr_decay_period, args.device)
-        client.set_dataloader(dataloaders[1])
-        del dataloaders
-        ser = serverfedavg.ServerFedAvg(model, args.device, testloader, args.batch_size, [client], args.test_epoch, args.train_round, args.data_save_path, args.agg_rate)
+        clients = create_clients(clientbase.Client, dataloaders, model, args.learning_rate, args.lr_decay, args.lr_decay_period, args.device)
+        ser = serverfedavg.ServerFedAvg(model, args.device, testloader, args.batch_size, clients, args.test_epoch, args.train_round, args.data_save_path, args.agg_rate)
     elif args.agg_algorithm in 'Single':
-        clients = create_clients(clientbase.Client, args.agg_algorithm, dataloaders, model, args.learning_rate, args.lr_decay, args.lr_decay_period, args.device)
+        clients = create_clients(clientbase.Client, dataloaders, model, args.learning_rate, args.lr_decay, args.lr_decay_period, args.device)
         ser = serverbase.ServerBase(model, args.device, testloader, args.batch_size, clients, args.test_epoch, args.train_round, args.data_save_path, args.agg_rate)
     elif args.agg_algorithm in 'ALW':
-        clients = create_clients(clientbase.Client, args.agg_algorithm, dataloaders, model, args.learning_rate, args.lr_decay, args.lr_decay_period, args.device)
+        clients = create_clients(clientbase.Client, dataloaders, model, args.learning_rate, args.lr_decay, args.lr_decay_period, args.device)
         proxy_loader = read_proxy_dataset(args.dataset, args.batch_size)
         ser = serverALW.ServerALW(model, args.device, testloader, proxy_loader, args.batch_size, clients, args.test_epoch, args.train_round, args.data_save_path, args.agg_rate)
-    input()
+    input("inpress to start train..")
     ser.train()
 
 
@@ -90,7 +87,7 @@ if __name__ == "__main__":
     parser.add_argument('-data', "--dataset", type=str, default="cifar10", choices=["mnist", "cifar10"], help="trained dataset. [mnist, cifar10]")
     parser.add_argument('-cn', "--client_num", type=int, default=2, help="clients number.")
     parser.add_argument('-niid', "--non_iid_number", type=int, default=0, help="non-iid dataset number.")
-    parser.add_argument('-bs', "--batch_size", type=int, default=8, help="batch size.")
+    parser.add_argument('-bs', "--batch_size", type=int, default=4, help="batch size.")
     parser.add_argument('-vs', "--valid_size", type=float, default=0.1, help="valid dataset size.")
     parser.add_argument('-htn', "--hete_num", type=int, default=0, help="number of heterogeneity dataset")
     parser.add_argument('-lr', "--learning_rate", type=float, default=0.005, help="client learning rate.")
@@ -104,7 +101,7 @@ if __name__ == "__main__":
     parser.add_argument('-pth', "--data_save_path", type=str, default="./data/data2.csv", help="data of result save path.")
     parser.add_argument('-ar', "--agg_rate", type=float, default=1, help="aggregation percentage of all clients.")
     parser.add_argument('-i', '--ip', type=str, default='127.0.0.1', help="a ip address to listen message.")
-    parser.add_argument('-p', '--port', type=int, default=8889, help="a port to listen message.")
+    parser.add_argument('-p', '--port', type=int, default=8890, help="a port to listen message.")
     parser.add_argument('-n', '--name', type=str, default='00000000', help='the client id.')
     parser.add_argument('-bi', '--boot_ip', type=str, default='127.0.0.1', help='a ip address to bootstrap node.')
     parser.add_argument('-bp', '--boot_port', type=int, default=8888, help="a port to bootstrap node.")

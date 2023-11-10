@@ -39,21 +39,22 @@ class Client():
 
     
     def server_bootstrap(self, listen_addr : tuple, boot_addr:tuple):
-        thread = Thread(target=self._server_bootstrap, args=(listen_addr, boot_addr))
+        self.main_loop = asyncio.new_event_loop()
+        thread = Thread(target=self._server_bootstrap, args=(listen_addr, boot_addr, self.main_loop), daemon=True)
         thread.start()
 
-    def _server_bootstrap(self, listen_addr : tuple, boot_addr : tuple):
-        loop = asyncio.get_event_loop()
-        loop.run_until_complete(self.server.listen(listen_addr[1], listen_addr[0]))
+    def _server_bootstrap(self, listen_addr : tuple, boot_addr : tuple, main_loop : asyncio.AbstractEventLoop):
+        asyncio.set_event_loop(main_loop)
+        main_loop.run_until_complete(self.server.listen(listen_addr[1], listen_addr[0]))
         if boot_addr[0] and boot_addr[1]:
-            loop.run_until_complete(self.server.node_bootstrap([boot_addr]))
+            main_loop.run_until_complete(self.server.node_bootstrap([boot_addr]))
         try:    
-            loop.run_forever()
+            main_loop.run_forever()
         except KeyboardInterrupt:
             pass
         finally:
             self.server.stop()
-            loop.stop()
+            main_loop.stop()
 
     def set_dataloader(self, dataloader : DataLoader):
         self.train_loader = dataloader[0]
@@ -144,16 +145,27 @@ class Client():
         return valid_loss
     
     def send_parameters(self, parameters : dict):
-        result = {}
-        for key, value in parameters.items():
-            bytes_io = BytesIO()
-            torch.save(value.cpu(), bytes_io)
-            result[key] = base64.b64encode(bytes_io.getvalue()).decode()
+        input("inpress to update parameters..")
+        byte_io = BytesIO()
+        torch.save(parameters, byte_io)
         del parameters
-        res_str = json.dumps(result)
-        del result
-        trans = self.server.make_transaction("0", res_str)
-        asyncio.run(self.server.broadcast_transaction(trans))
+        res_str = byte_io.getvalue().hex()
+        byte_io.close()
+        del byte_io
+        future = asyncio.run_coroutine_threadsafe(self.server.make_transaction("0", res_str), self.main_loop)
+        trans = future.result(10)
+        asyncio.run_coroutine_threadsafe(self.server.broadcast_transaction(trans), self.main_loop)
+
+    def get_parameters_from_blockchain(self):
+        trans_pool = self.server.trans_pool
+        datas = [trans.data for trans in trans_pool]
+        params = []
+        for data_hash in datas:
+            future = asyncio.run_coroutine_threadsafe(self.server.get(data_hash), self.main_loop)
+            byte_io = BytesIO(bytes.fromhex(future.result(10))); byte_io.seek(0)
+            res_dic = torch.load(byte_io)
+            params.append(res_dic)
+        return params
 
 
     def update_parameters(self):

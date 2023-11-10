@@ -1,7 +1,7 @@
 import torch
 from flcore.client.clientFedAvg import *
 from copy import deepcopy
-import queue
+import asyncio
 from utils.readData import *
 from flcore.server.serverbase import ServerBase
 
@@ -11,20 +11,11 @@ class ServerFedAvg(ServerBase):
         super(ServerFedAvg, self).__init__(model, device, testloader, testbatchsize, clients, test_epoch, train_round, save_path, agg_rate)
 
 
-    def model_aggregation(self, params_queue : queue.Queue):
+    def model_aggregation(self):
         '''对所有参与方的参数加和'''
-        if params_queue.empty():
-            raise Exception("没有能进行加和的参数..")
-        with torch.set_grad_enabled(False):
-            #先取出所有梯度
-            params_list = []
-            while(params_queue.empty() == False):
-                item = params_queue.get()
-                param = item["params"]
-                params_list.append(param)
-        #聚合
-        weights = [1 / len(params_list)] * len(params_list)
-        self.model = self.update_parameter_layer(self.model, params_list, weights)
-        return self.model.state_dict()
+        self.client.server.print_transaction_pool()
+        data_hash = [tx.data for tx in self.client.server.trans_pool]
+        data = [asyncio.run(self.client.server.get(h)) for h in data_hash]
+        print(data)
     
         

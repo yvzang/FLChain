@@ -41,7 +41,8 @@ class DataExchangeProtocol(KademliaProtocol):
             if self.node.verify_trans(trans):
                 log.info("Receive transaction digest from and forward to other node.")
                 self.node.add_transaction(trans)
-                task = await self.node.broadcast(self.call_forward_trans, trans_str, [sender])
+                loop = asyncio.get_event_loop()
+                loop.create_task(self.node.broadcast(self.call_forward_trans, trans_str, [sender]))
 
     async def rpc_forward_block(self, sender, block_str):
         block = Block.Block_Decode(block_str)
@@ -52,7 +53,8 @@ class DataExchangeProtocol(KademliaProtocol):
             if self.node.verify_block(block):
                 log.info("Receive block message from {} and forward to other node.")
                 self.node.accept_block(block)
-                task = await self.node.broadcast(self.call_forward_block, block_str, [sender])
+                loop = asyncio.get_event_loop()
+                loop.create_task(self.node.broadcast(self.call_forward_block, block_str, [sender]))
 
     def rpc_get_transactions(self, sender, tx_hash : str):
         log.info("Receive a request for transactions detail from {}:{}".format(sender[0], sender[1]))
@@ -86,22 +88,22 @@ class DataExchangeProtocol(KademliaProtocol):
         return [str(self.node.blockchain), str(self.node.trans_pool)]
     
     
-    async def call_get_chain_state(self, sender):
-        log.info("Send a request for state of chain from {}:{}".format(sender[0], sender[1]))
-        resp = await self.get_chain_state(sender)
-        if not resp[0]:
-            log.info("Faile to get blockchain state from bootstrap address due to network connection.")
-            return None
-        return resp[1]
+    async def call_get_chain_state(self, node_to_ask):
+        address = (node_to_ask.ip, node_to_ask.port)
+        log.info("Send a request for state of chain from {}:{}".format(address[0], address[1]))
+        resp = await self.remote_rpc_packager(self.get_chain_state, args=(address, ))
+        return resp
 
     
     async def call_forward_trans(self, sender, trans_str):
         log.info("Send a transaction message to {}:{}".format(sender[0], sender[1]))
-        return await self.forward_trans(sender, trans_str)
+        result = await self.remote_rpc_packager(self.forward_trans, args=(sender, trans_str))
+        return result
     
     async def call_forward_block(self, sender, block_str):
         log.info("Send a block message to {}:{}".format(sender[0], sender[1]))
-        return await self.forward_block(sender, block_str)
+        result = await self.remote_rpc_packager(self.forward_block, args=(sender, block_str))
+        return result
     
     async def call_get_transactions(self, ask, tx_hashs : list):
         log.info("Send a transaction request message to {}:{}".format(ask[0], ask[1]))

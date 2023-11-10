@@ -10,10 +10,10 @@ from utils.readData import *
 
 
 class ServerBase():
-    def __init__(self, model, device, testloader, testbatchsize, client, test_epoch, train_round, save_path, agg_rate):
+    def __init__(self, model, device, testloader, testbatchsize, clients, test_epoch, train_round, save_path, agg_rate):
         self.device : str = device
         self.model : torch.nn.Module = self.__to_device__(model)
-        self.client = client
+        self.clients = clients
         self.testloader = testloader
         self.testbatchsize = testbatchsize
         self.loss_fn :  CrossEntropyLoss = self.__to_device__(CrossEntropyLoss())
@@ -43,15 +43,15 @@ class ServerBase():
 
     def train(self):
         '''训练模型参数'''
-        if(len(self.clients) == 0):
-            raise RuntimeError("客户端未连接")
         #进行epoch轮迭代
         self.total_epoch = 1
         while(True):
             #开始训练
-            self.client.update_parameters()
+            for client in self.clients:
+                client.update_parameters()
             #加权平均
-            global_params = self.model_aggregation()
+            miner = random.sample(self.clients, 1)
+            global_params = self.model_aggregation(miner)
             loss, accuracy = self.get_loss_accu()
             print("loss: {}".format(loss.item()) + ", accuracy: {}".format(accuracy.item()))
             #记录数据
@@ -190,15 +190,11 @@ class ServerBase():
         return arg_module
     
 
-    def model_aggregation(self):
+    def model_aggregation(self, miner):
         '''对所有参与方的参数加和'''
         #先取出所有梯度
-
-        item = self.client
-        param = item["params"]
-        self.model = self.update_parameter_layer(self.model, [param], [1.0])
-        return self.model.state_dict()
-    
+        params = miner.get_parameters_from_blockchain()
+        print(len(params))
         
 
     def set_clients_parameters(self, clients, para):

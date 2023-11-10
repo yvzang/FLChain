@@ -1,13 +1,10 @@
 from blockchain.kademlia.network import Server
-from blockchain.kademlia.crawling import ValueSpiderCrawl
 from blockchain.block.transaction import Transaction
 from blockchain.block.transaction_pool import Transaction_pool
 from blockchain.block.block import Block
-from blockchain.block.blocklist import BlockList
 from blockchain.block.blockchain import BlockChain
 from blockchain.protocol import DataExchangeProtocol
 from blockchain.utils.utils import *
-import json
 import math
 import random
 import logging
@@ -87,7 +84,7 @@ class Node(Server):
         cos = [call_method((nb.ip, nb.port), message) for nb in neighbors]
         gathered = await asyncio.gather(*cos)
 
-    def make_transaction(self, to, data):
+    async def make_transaction(self, to, data):
         r"""makes a transaction for node.
         Notes:
             the method will return a transaction that source is always this node.
@@ -99,7 +96,7 @@ class Node(Server):
         """
         data_hash = data_digest(data)
         trans = Transaction.Transe_Create(self.psu_key, to, data_hash)
-        asyncio.run(self.set(data_hash, data))
+        await self.set(data_hash, data)
         return trans
 
 
@@ -118,7 +115,9 @@ class Node(Server):
         Returns:
             new block [Block].
         """
-        if len(trans_pool) == 0: raise RuntimeError("You can not create a empty block.")
+        if len(trans_pool) == 0: 
+            log.error("you can not create a empty block.")
+            return None
         pre_block = self.blockchain.last_block()
         return Block.Create_Block(trans_pool, 0 if not pre_block else pre_block.id+1, 
                                   self.psu_key, None if not pre_block else pre_block.hash, None)
@@ -130,6 +129,7 @@ class Node(Server):
         """
         if self.verify_block(block):
             self.accept_block(block)
+        log.info("starting broadcast mwssage.")
         await self.broadcast(self.protocol.call_forward_block, str(block))
 
 
@@ -143,7 +143,10 @@ class Node(Server):
         if (len(nearist) == 0):
             log.error("Faile to bootstrap due to invalid bootable node address.")
             return
-        response = await self.protocol.call_get_chain_state(boot_node_addr[0])
+        for node in nearist:
+            response = await self.protocol.call_get_chain_state(node)
+            if response[0]: break
+        response = response[1]
         self.blockchain = BlockChain.Blockchain_Decode(response[0])
         self.trans_pool = Transaction_pool.TransPool_Decode(response[1])
         log.info("Successfully to init blockchian status.")
@@ -245,3 +248,6 @@ class Node(Server):
 
     def print_transaction_pool(self):
         print(self.trans_pool.__list__())
+
+    def print_neighbor(self):
+        print(self.neighbors())
