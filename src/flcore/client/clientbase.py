@@ -29,7 +29,7 @@ class Client():
         self.weight_decay = 5e-4
         self.__loss_fn__ : CrossEntropyLoss = self.__to_device__(CrossEntropyLoss())
         self.__optim__ = BasedOptimizer(self.local_module.parameters(), lr)
-        self.epoch = 1
+        self.epoch = 0
         self.lr_decay : float = lr_decay
         self.decay_period = decay_period
         self.valid_loss_min = np.Inf

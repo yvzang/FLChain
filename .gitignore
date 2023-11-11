@@ -9,4 +9,6 @@
 /seal_dll/seal_dll/x64/
 /seal_dll/x64/
 /runs/
+/storage/
+/data/
 *.pyc

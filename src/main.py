@@ -84,7 +84,7 @@ def run(args : argparse.Namespace):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('-data', "--dataset", type=str, default="mnist", choices=["mnist", "cifar10"], help="trained dataset. [mnist, cifar10]")
-    parser.add_argument('-cn', "--client_num", type=int, default=2, help="clients number.")
+    parser.add_argument('-cn', "--client_num", type=int, default=4, help="clients number.")
     parser.add_argument('-niid', "--non_iid_number", type=int, default=0, help="non-iid dataset number.")
     parser.add_argument('-bs', "--batch_size", type=int, default=8, help="batch size.")
     parser.add_argument('-vs', "--valid_size", type=float, default=0.1, help="valid dataset size.")
