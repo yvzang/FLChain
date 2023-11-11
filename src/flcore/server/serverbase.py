@@ -1,13 +1,14 @@
-import torch
-from flcore.client import *
 from torch.nn.modules import CrossEntropyLoss
-import random
 from threading import Thread, Lock
 from copy import deepcopy
-import queue
 import pandas as pd
-from utils.readData import *
+import torch
+import random
+import asyncio
 
+from flcore.client import *
+from utils.readData import *
+from utils.utils import *
 
 class ServerBase():
     def __init__(self, model, device, testloader, testbatchsize, clients, test_epoch, train_round, save_path, agg_rate):
@@ -47,10 +48,11 @@ class ServerBase():
         self.total_epoch = 1
         while(True):
             #开始训练
+            print("starting to train in {} epoch".format(self.total_epoch))
             for client in self.clients:
                 client.update_parameters()
             #加权平均
-            miner = random.sample(self.clients, 1)
+            miner = random.sample(self.clients, 1)[0]
             global_params = self.model_aggregation(miner)
             loss, accuracy = self.get_loss_accu()
             print("loss: {}".format(loss.item()) + ", accuracy: {}".format(accuracy.item()))
@@ -60,7 +62,7 @@ class ServerBase():
                 data.to_csv(self.save_path, index=False)
             else:
                 data.to_csv(self.save_path, mode="a", index=False, header=False)
-            self.set_clients_parameters(self.clients, deepcopy(global_params))
+            self.set_clients_parameters(self.clients)
             #判断是否结束训练
             self.total_epoch += 1
             if(self.total_epoch % self.test_epoch == 0):self.print_percent(accuracy)
@@ -194,10 +196,14 @@ class ServerBase():
         '''对所有参与方的参数加和'''
         #先取出所有梯度
         params = miner.get_parameters_from_blockchain()
-        print(len(params))
+        weights = [1 / len(params)] * len(params)
+        agg_param = self.aggregate_parameters(params, weights)
+        miner.make_block(agg_param)
+        self.model = self.get_updated_module(self.model, agg_param)
+        return self.model.state_dict()
         
 
-    def set_clients_parameters(self, clients, para):
+    def set_clients_parameters(self, clients):
         '''将参数para传递给参与方列表clients'''
         for client in clients:
-            client.set_parameters(para)
+            client.set_parameters()

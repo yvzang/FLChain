@@ -108,7 +108,7 @@ class Node(Server):
             self.trans_pool.append(trans)
         await self.broadcast(self.protocol.call_forward_trans, str(trans))
 
-    def make_block(self, trans_pool : Transaction_pool):
+    async def make_block(self, trans_pool : Transaction_pool, data=None):
         r"""Creates a block with provided transactions list.
         Args:
             trans_pool [Transaction_pool]: transaction list.
@@ -118,9 +118,13 @@ class Node(Server):
         if len(trans_pool) == 0: 
             log.error("you can not create a empty block.")
             return None
+        data_hash = None
+        if data:
+            data_hash = data_digest(data)
+            await self.set(data_hash, data)
         pre_block = self.blockchain.last_block()
         return Block.Create_Block(trans_pool, 0 if not pre_block else pre_block.id+1, 
-                                  self.psu_key, None if not pre_block else pre_block.hash, None)
+                                  self.psu_key, None if not pre_block else pre_block.hash, None, data_hash)
 
     
     async def broadcast_block(self, block):

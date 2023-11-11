@@ -49,13 +49,16 @@ class KademliaProtocol(RPCProtocol):
         return {'ip': receiv_addr[0], 'port': receiv_addr[1], 'key': key}
 
 
-    def rpc_store(self, sender, nodeid, key, link_key):
+    def rpc_store(self, sender, nodeid, key, link_key, data_hash):
         source = Node(nodeid, sender[0], sender[1])
         self.welcome_if_new(source)
         log.debug("got a store request from %s, storing '%s'",
                   sender, key.hex())
-        self.storage[key] = self.temp_data[link_key].result().decode()
+        value = self.temp_data[link_key].result().decode()
         self.temp_data.pop(link_key)
+        if data_digest(value) != data_hash:
+            log.error("unsuccesfully to verify value.")
+        self.storage[key] = value
         return True
 
     def rpc_find_node(self, sender, nodeid, key):
@@ -101,7 +104,7 @@ class KademliaProtocol(RPCProtocol):
         link_key = await self.call_send_data(address, value)
         if not link_key:
             return self.handle_call_response((False, False), node_to_ask)
-        result = await self.remote_rpc_packager(self.store, args=(address, self.source_node.id, key, link_key))
+        result = await self.remote_rpc_packager(self.store, args=(address, self.source_node.id, key, link_key, data_digest(value)))
         return self.handle_call_response(result, node_to_ask)
     
     async def call_send_data(self, receiver, data):
@@ -166,7 +169,7 @@ class KademliaProtocol(RPCProtocol):
             self.router.remove_contact(node)
             return result
 
-        log.info("got successful response from {}:{}".format(node, result))
+        log.info("got successful response from {}".format(node))
         self.welcome_if_new(node)
         return result
     
@@ -181,8 +184,11 @@ class DataChenelReceiver():
 
 
     async def receiver_handler(self, reader, writer):
-        self.data = await asyncio.wait_for(reader.read(self.datasize), 5)
+        self.data = b''
+        while len(self.data) < self.datasize:
+            self.data += await asyncio.wait_for(reader.read(self.datasize), 180)
         if not self.data:
+            log.error("There is not data be received.")
             writer.close()
             await writer.wait_closed()
             return
@@ -208,7 +214,7 @@ class DataChannelSender():
         self.host = host
         self.port = port
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.sock.settimeout(5)
+        self.sock.settimeout(180)
     
     def send(self, data:bytes):
         try:

@@ -9,10 +9,11 @@ import json
 import torch
 import base64
 import asyncio
-from flcore.optimizer.fedoptimizer import BasedOptimizer
 from io import BytesIO
 
+from flcore.optimizer.fedoptimizer import BasedOptimizer
 from blockchain.node import Node
+from utils.utils import *
 
 
 class Client():
@@ -66,12 +67,20 @@ class Client():
         elif self.device == 'cuda':
             return model.cuda()
         
-    def set_parameters(self, parameters):
-        self.local_module.load_state_dict(parameters)
-        #self.local_module._set_parameters(parameters)
+    def set_parameters(self):
+        global_gradient = self.get_global_params_from_block()
+        self.local_module = self.get_updated_module(self.local_module, global_gradient)
 
-    def get_parameters(self):
-        return self.local_module.state_dict()
+
+    def get_global_params_from_block(self):
+        last_block = self.server.blockchain.last_block()
+        key = last_block.header()['data']
+        future = asyncio.run_coroutine_threadsafe(self.server.get(key), self.main_loop)
+        value = future.result(20)
+        agg_gradient = str2ten(value)
+        del value
+        return agg_gradient
+        
 
     def set_parameters_from_list(self, params_lst):
         '''设置参与方本地模型参数,'''
@@ -135,7 +144,7 @@ class Client():
                 pred = (pred == label).sum()
                 # correct = np.squeeze(correct_tensor.to(device).numpy())
                 accuracy += pred.float()
-        print("Accuracy:", 100 * accuracy.item() / (len(self.valid_loader) * 32), "%")
+        print("Accuracy:", 100 * accuracy.item() / (len(self.valid_loader) * 8), "%")
         valid_loss = valid_loss / len(self.valid_loader.sampler)
 
         if valid_loss < self.valid_loss_min:
@@ -144,17 +153,21 @@ class Client():
             self.valid_loss_min = valid_loss
         return valid_loss
     
+    def make_block(self, agg_params : dict):
+        params_str = ten2str(agg_params)
+        del agg_params
+        future = asyncio.run_coroutine_threadsafe(self.server.make_block(self.server.trans_pool, params_str), self.main_loop)
+        block = future.result(20)
+        future = asyncio.run_coroutine_threadsafe(self.server.broadcast_block(block), self.main_loop)
+        future.result(20)
+    
     def send_parameters(self, parameters : dict):
-        input("inpress to update parameters..")
-        byte_io = BytesIO()
-        torch.save(parameters, byte_io)
-        del parameters
-        res_str = byte_io.getvalue().hex()
-        byte_io.close()
-        del byte_io
+        res_str = ten2str(parameters)
         future = asyncio.run_coroutine_threadsafe(self.server.make_transaction("0", res_str), self.main_loop)
-        trans = future.result(10)
-        asyncio.run_coroutine_threadsafe(self.server.broadcast_transaction(trans), self.main_loop)
+        trans = future.result(20)
+        future = asyncio.run_coroutine_threadsafe(self.server.broadcast_transaction(trans), self.main_loop)
+        future.result(20)
+
 
     def get_parameters_from_blockchain(self):
         trans_pool = self.server.trans_pool
@@ -162,8 +175,9 @@ class Client():
         params = []
         for data_hash in datas:
             future = asyncio.run_coroutine_threadsafe(self.server.get(data_hash), self.main_loop)
-            byte_io = BytesIO(bytes.fromhex(future.result(10))); byte_io.seek(0)
-            res_dic = torch.load(byte_io)
+            data_hex = future.result(20)
+            if not data_hex: continue
+            res_dic = str2ten(data_hex)
             params.append(res_dic)
         return params
 
@@ -178,3 +192,17 @@ class Client():
             self.send_parameters(self.pseudo_grad)
 
 
+    def get_updated_module(self, arg_module : torch.nn.Module, gradient : dict) -> torch.nn.Module:
+        r"""Calculates updated module for provided module by providing the gradient.
+        The module parameters can contain grad if provide retrain_graph true.
+        
+        Args:
+            arg_module (dict): parameters of target module need to be updated
+            gradient (dict): a gradient need be updated.
+
+        Returns:
+            updated module parameters.
+        """
+        for name, param in arg_module.named_parameters():
+            param.data -= gradient[name].data
+        return arg_module

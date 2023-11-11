@@ -163,7 +163,7 @@ class Server:
             raise TypeError(
                 "Value must be of type int, float, bool, str, or bytes"
             )
-        log.info("setting '%s' = '%s' on network", key, value)
+        log.info("setting '%s' on network", key)
         dkey = digest(key)
         return await self.set_digest(dkey, value)
 

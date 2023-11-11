@@ -78,16 +78,15 @@ def run(args : argparse.Namespace):
         clients = create_clients(clientbase.Client, dataloaders, model, args.learning_rate, args.lr_decay, args.lr_decay_period, args.device)
         proxy_loader = read_proxy_dataset(args.dataset, args.batch_size)
         ser = serverALW.ServerALW(model, args.device, testloader, proxy_loader, args.batch_size, clients, args.test_epoch, args.train_round, args.data_save_path, args.agg_rate)
-    input("inpress to start train..")
     ser.train()
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument('-data', "--dataset", type=str, default="cifar10", choices=["mnist", "cifar10"], help="trained dataset. [mnist, cifar10]")
+    parser.add_argument('-data', "--dataset", type=str, default="mnist", choices=["mnist", "cifar10"], help="trained dataset. [mnist, cifar10]")
     parser.add_argument('-cn', "--client_num", type=int, default=2, help="clients number.")
     parser.add_argument('-niid', "--non_iid_number", type=int, default=0, help="non-iid dataset number.")
-    parser.add_argument('-bs', "--batch_size", type=int, default=4, help="batch size.")
+    parser.add_argument('-bs', "--batch_size", type=int, default=8, help="batch size.")
     parser.add_argument('-vs', "--valid_size", type=float, default=0.1, help="valid dataset size.")
     parser.add_argument('-htn', "--hete_num", type=int, default=0, help="number of heterogeneity dataset")
     parser.add_argument('-lr', "--learning_rate", type=float, default=0.005, help="client learning rate.")

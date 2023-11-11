@@ -1,10 +1,10 @@
-from blockchain.block.transaction import Transaction
-from blockchain.block.transaction_pool import Transaction_pool
 from copy import deepcopy
 import time
 import json
 
-from utils.utils import *
+from blockchain.block.transaction import Transaction
+from blockchain.block.transaction_pool import Transaction_pool
+from blockchain.utils.utils import *
 
 block_reward=5
 
@@ -18,6 +18,7 @@ class Block:
         self.pre_hash = None
         self.hash = None
         self.next_hash = None
+        self.data = None
 
     def header(self):
         attrs = deepcopy(self.__dict__)
@@ -28,11 +29,12 @@ class Block:
         return self.trans.__list__()
 
     @staticmethod
-    def Create_Block(trans_pool, id, creater, pre_hash, next_hash):
+    def Create_Block(trans_pool, id, creater, pre_hash, next_hash, data=None):
         new_block = Block()
         new_block.trans : Transaction_pool = Transaction_pool(trans_pool.return_all())
         new_block.trans_num = len(new_block.trans)
         new_block.id = id
+        new_block.data = data
         new_block.creater = creater
         new_block.pre_hash = pre_hash
         new_block.next_hash = next_hash
