@@ -4,7 +4,7 @@ from copy import deepcopy
 import pandas as pd
 import torch
 import random
-import asyncio
+import os
 
 from flcore.client import *
 from utils.readData import *
@@ -67,6 +67,8 @@ class ServerBase():
             self.total_epoch += 1
             if(self.total_epoch % self.test_epoch == 0):self.print_percent(accuracy)
             if(self.total_epoch == self.train_round):break
+            #清空缓存
+            self.clear_storage()
 
     
     def get_loss(self, params=None, fast=False):
@@ -207,3 +209,9 @@ class ServerBase():
         '''将参数para传递给参与方列表clients'''
         for client in clients:
             client.set_parameters()
+
+    
+    def clear_storage(self):
+        #map(lambda client: client.server.storage.clear_storage(), self.clients)
+        for client in self.clients:
+            client.server.storage.clear_storage()

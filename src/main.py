@@ -84,7 +84,7 @@ def run(args : argparse.Namespace):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('-data', "--dataset", type=str, default="mnist", choices=["mnist", "cifar10"], help="trained dataset. [mnist, cifar10]")
-    parser.add_argument('-cn', "--client_num", type=int, default=4, help="clients number.")
+    parser.add_argument('-cn', "--client_num", type=int, default=10, help="clients number.")
     parser.add_argument('-niid', "--non_iid_number", type=int, default=0, help="non-iid dataset number.")
     parser.add_argument('-bs', "--batch_size", type=int, default=8, help="batch size.")
     parser.add_argument('-vs', "--valid_size", type=float, default=0.1, help="valid dataset size.")
@@ -97,7 +97,7 @@ if __name__ == "__main__":
     parser.add_argument('-dv', "--device", type=str, default='cuda', choices=["cuda", "cpu"], help="training device. [cpu, cuda]")
     parser.add_argument('-te', "--test_epoch", type=int, default=5, help="how many epoch test loss and accuracy.")
     parser.add_argument('-tr', "--train_round", type=int, default=50, help="total training rounds.")
-    parser.add_argument('-pth', "--data_save_path", type=str, default="./data/data2.csv", help="data of result save path.")
+    parser.add_argument('-pth', "--data_save_path", type=str, default="./data/data1.csv", help="data of result save path.")
     parser.add_argument('-ar', "--agg_rate", type=float, default=1, help="aggregation percentage of all clients.")
     parser.add_argument('-i', '--ip', type=str, default='127.0.0.1', help="a ip address to listen message.")
     parser.add_argument('-p', '--port', type=int, default=8890, help="a port to listen message.")

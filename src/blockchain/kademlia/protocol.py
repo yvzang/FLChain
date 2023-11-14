@@ -42,9 +42,8 @@ class KademliaProtocol(RPCProtocol):
     
     def rpc_send_prepar(self, sender, datasize):
         key = random.random()
-        receiv_addr = ("127.0.0.1", random.randint(2000, 8888))
-        receiver = DataChenelReceiver(receiv_addr[1], datasize=datasize, host=receiv_addr[0])
-        receiver.run()
+        receiver = DataChenelReceiver(datasize=datasize)
+        receiv_addr = receiver.run()
         self.temp_data[key] = receiver
         return {'ip': receiv_addr[0], 'port': receiv_addr[1], 'key': key}
 
@@ -177,9 +176,8 @@ class KademliaProtocol(RPCProtocol):
 confirm_msg = b'/-ok!-/'
 
 class DataChenelReceiver():
-    def __init__(self, port, datasize, host="127.0.0.1") -> None:
+    def __init__(self, datasize, host="127.0.0.1") -> None:
         self.host = host
-        self.port = port
         self.datasize = datasize
 
 
@@ -199,9 +197,14 @@ class DataChenelReceiver():
 
 
     def run(self):
-        loop = asyncio.get_event_loop()
-        server = asyncio.start_server(self.receiver_handler, host=self.host, port=self.port, loop=loop)
-        self.server = loop.run_until_complete(server)
+        try:
+            self.port = random.randint(2000, 8888)
+            loop = asyncio.get_event_loop()
+            server = asyncio.start_server(self.receiver_handler, host=self.host, port=self.port, loop=loop)
+            self.server = loop.run_until_complete(server)
+        except OSError:
+            self.run()
+        return (self.host, self.port)
         
     def close(self):
         self.server.close()

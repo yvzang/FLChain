@@ -59,6 +59,8 @@ class ForgetfulStorage(IStorage):
     def __load_items_from_path__(self):
         if not path.exists(self.storage_path):
             os.makedirs(self.storage_path)
+        else:
+            self.clear_storage()
 
     def __write_to__(self, full_name, value):
         with open(full_name, mode='wb') as f:
@@ -90,6 +92,11 @@ class ForgetfulStorage(IStorage):
         if key in self.data:
             os.remove(self.__full_name__(self.__concat_filename__(self.data[key], key)))
             self.data.pop(key)
+
+    def clear_storage(self):
+        file_list = os.listdir(self.storage_path)
+        for filename in file_list:
+            os.remove(self.__full_name__(filename))
 
     def __getitem__(self, key):
         self.cull()
