@@ -8,6 +8,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torchvision
 
+
 class ResidualBlock(nn.Module):
     def __init__(self, inchannel, outchannel, stride=1):
         super(ResidualBlock, self).__init__()
@@ -273,15 +274,6 @@ class FedAvgCNN(nn.Module):
         out = self.fc1(out)
         out = self.fc(out)
         return out
-
-
-
-
-
-
-
-
-
 
 
 

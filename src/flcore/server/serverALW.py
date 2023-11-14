@@ -1,8 +1,7 @@
 import torch
 from flcore.client.clientbase import *
 from copy import deepcopy
-import queue
-import math
+from torch.nn import Softmax
 from utils.readData import *
 from flcore.server.serverbase import ServerBase
 
@@ -14,45 +13,61 @@ class ServerALW(ServerBase):
         self.fi1 = 0.8
         self.fi2 = 3
 
-    def get_grad_loss(self, gradient : dict):
-        updated_model = self.get_updated_module(deepcopy(self.model), gradient)
-        with torch.no_grad():
-            loss = self.__to_device__(torch.zeros(1))
-            updated_model.eval()
-            for image, label in self.proxyloader:
-                image = self.__to_device__(image)
-                label = self.__to_device__(label)
-                output = updated_model(image)
-                #计算损失
-                curr_loss = self.loss_fn(output, label)
-                loss += curr_loss
-            return loss
+    def get_updated_module_with_gama(self, arg_module : torch.nn.Module, gradient : dict, gama, retain_graph=True) -> torch.nn.Module:
+        r"""Calculates updated module for provided module by providing the gradient.
+        The module parameters can contain grad if provide retrain_graph true.
+        
+        Args:
+            arg_module (dict): parameters of target module need to be updated
+            gradient (dict): a gradient need be updated.
+
+        Returns:
+            updated module parameters.
+        """
+        updated_model_dict = {}
+        for name, param in arg_module.named_parameters():
+            if retain_graph:
+                updated_model_dict[name] = gama * (param.data - gradient[name])
+            else:
+                updated_model_dict[name] = (gama * (param.data - gradient[name])).detach()
+        arg_module.set_parameter_state_dict(updated_model_dict)
+        return arg_module
+
+
+    def aggregate_parameters_softmax(self, pseudo_params: list, weights: list, prefix: list = None) -> dict:
+        if len(pseudo_params) == 0:
+            raise Exception("The aggregated parameters is empty.")
+        agg_params = {}
+        softmax = Softmax(dim=0)
+        cohot_len = len(pseudo_params)
+        for key, value in pseudo_params[0].items():
+            agg_params[key] = torch.zeros_like(value, device=self.device, requires_grad=True).float()
+            for i in range(cohot_len):
+                agg_params[key] = agg_params[key] + (softmax(weights)[i] * pseudo_params[i][key].data)
+        return agg_params
 
     
-    def __calculate_optim_weight__(self, aggregate_list, weight_list, lr=0.008, bios=0.001):
-        if len(aggregate_list) != len(weight_list):
-            raise Exception("参数列表和权重列表不一致.")
-        for i in range(len(aggregate_list)):
-            weight = weight_list[i]
-            print("init weight: ", weight)
-            #获得初始化的损失
-            aggregated = self.aggregate_parameters(aggregate_list, weight_list)
-            init_loss = self.get_grad_loss(aggregated)
-            print("init loss: ", init_loss)
-            init_loss = self.get_grad_loss(aggregated)
-            print("init loss: ", init_loss)
-            #获得聚合后的损失
-            t_weight_list = weight_list[:]; t_weight_list[i] = weight + bios
-            aggregated = self.aggregate_parameters(aggregate_list, t_weight_list)
-            agg_loss = self.get_grad_loss(aggregated)
-            print("after loss: ", agg_loss)
-            #更新损失
-            update = -lr * (agg_loss.item() - init_loss.item()) / bios
-            weight = weight + update
-            if weight < 0: weight = 0
-            weight_list[i] =weight
-            print("after weight: ", weight)
-        return aggregate_list, weight_list
+    def __calculate_optim_weight__(self, aggregate_list, weight_list, lr=0.005, epoch=20):
+        agg_weight = torch.tensor([torch.log(torch.tensor(w)) for w in weight_list], device=self.device, requires_grad=True)
+        gama = torch.tensor(1.0, device=self.device, requires_grad=True)
+        softmax = Softmax(dim=0)
+        optimizees_list = [ agg_weight]
+        opt = torch.optim.SGD(optimizees_list, lr=lr)
+        updated_model = deepcopy(self.model)
+        updated_model.train()
+        for i in range(epoch):
+            for image, label in self.proxyloader:
+                agg_grad = self.aggregate_parameters_softmax(aggregate_list, agg_weight)
+                updated_model = self.get_updated_module_with_gama(updated_model, agg_grad, gama)
+                image = self.__to_device__(image); label = self.__to_device__(label)
+                opt.zero_grad()
+                output = updated_model(image)
+                loss = self.loss_fn(output, label)
+                loss.backward()
+                opt.step()
+            print(softmax(agg_weight))
+            print(gama)
+        return [w for w in softmax(agg_weight).detach()], gama
 
 
 
@@ -60,26 +75,18 @@ class ServerALW(ServerBase):
         #对所有参与方的参数加和
         if params_queue.empty():
             raise Exception("没有能进行加和的参数..")
-        with torch.set_grad_enabled(False):
-            #先取出所有梯度
-            params_list = []
-            loss_decent_list = []
-            while(params_queue.empty() == False):
-                item = params_queue.get()
-                param = item["params"]
-                params_list.append(param)
-            print(self.get_loss())
-            print(self.get_loss())
-            print(loss_decent_list)
-            aggregate_list = params_list
-            weight_list = [1 / len(aggregate_list)] * len(aggregate_list)
-            decay = 0.98
-            for i in range(0, 20):
-                aggregate_list, weight_list = self.__calculate_optim_weight__(aggregate_list, weight_list, lr=0.0002*(math.pow(decay, i)))
-                print(weight_list)
-        if sum(weight_list) < self.fi1: weight_list = [self.fi1 * w / sum(weight_list) for w in weight_list]
-        elif sum(weight_list) > self.fi2 : weight_list = [self.fi2 * w / sum(weight_list) for w in weight_list]
+        #先取出所有梯度
+        params_list = []
+        while(params_queue.empty() == False):
+            item = params_queue.get()
+            param = item["params"]
+            params_list.append(param)
+        aggregate_list = params_list
+        weight_list = [1 / len(aggregate_list)] * len(aggregate_list)
+        weight_list, gama = self.__calculate_optim_weight__(aggregate_list, weight_list)
+        print(weight_list)
         #聚合
-        self.model = self.update_parameter_layer(self.model, params_list, weight_list)
+        agg_gradient = self.aggregate_parameters(aggregate_list, weight_list)
+        self.model = self.get_updated_module_with_gama(self.model, agg_gradient, gama, retain_graph=False)
         return self.model.state_dict()
         
